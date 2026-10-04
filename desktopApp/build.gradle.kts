@@ -22,7 +22,7 @@ compose.desktop {
         mainClass = "com.keikuethas.osemulator.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Exe)
             packageName = "com.keikuethas.osemulator"
             packageVersion = "1.0.0"
         }

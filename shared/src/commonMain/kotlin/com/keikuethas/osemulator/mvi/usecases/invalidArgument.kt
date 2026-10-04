@@ -8,9 +8,17 @@ import com.keikuethas.osemulator.ui.TerminalColors
 fun invalidArgument(
     state: CMDWindowState,
     result: CMDResult.InvalidArgument
-) = state.copy(
-    lines = state.lines + StyledText.of(
-        "Неверный аргумент: ${result.value}",
-        TerminalColors.Error
+): CMDWindowState {
+    val newLines = state.lines.toMutableList()
+    newLines += StyledText.of(
+        text = "Неверный аргумент: ${result.value}",
+        rgb = TerminalColors.Error
     )
-)
+    result.description?.let { desc ->
+        newLines += StyledText.of(
+            text = desc,
+            rgb = TerminalColors.Muted
+        )
+    }
+    return state.copy(lines = newLines.toList())
+}

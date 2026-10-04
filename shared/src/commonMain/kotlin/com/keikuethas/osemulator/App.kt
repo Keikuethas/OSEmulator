@@ -21,8 +21,9 @@ import com.keikuethas.osemulator.ui.TerminalScreen
 @Composable
 @Preview
 fun App(
-    viewModel: CMDViewModel = viewModel { CMDViewModel() },
-    onEffect: (CMDEvent) -> Unit = {}
+    args: Array<String> = emptyArray(),
+    viewModel: CMDViewModel = viewModel { CMDViewModel(args) },
+    onEvent: (CMDEvent) -> Unit = {}
 ) {
     val inputText = remember { mutableStateOf("") }
     val state = viewModel.windowStateFlow.collectAsStateWithLifecycle().value
@@ -30,7 +31,7 @@ fun App(
 
     LaunchedEffect(Unit) {
         eventFlow.collect {
-            onEffect(it)
+            onEvent(it)
         }
     }
 
@@ -47,8 +48,10 @@ fun App(
                 input = inputText.value,
                 onInputChange = { inputText.value = it },
                 onEnter = { cmd ->
-                    viewModel.sendMessage(cmd)
-                    inputText.value = ""
+                    if (cmd.isNotBlank()) {
+                        viewModel.sendMessage(cmd.trim())
+                        inputText.value = ""
+                    }
                 },
             )
         }

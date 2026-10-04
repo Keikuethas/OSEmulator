@@ -1,29 +1,71 @@
 package com.keikuethas.osemulator.cmd
 
+import com.keikuethas.osemulator.cmd.commands.CD
+import com.keikuethas.osemulator.cmd.commands.Exit
+import com.keikuethas.osemulator.cmd.commands.LS
 import com.keikuethas.osemulator.mvi.CMDResponse
 import com.keikuethas.osemulator.mvi.CMDResult
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import java.io.File
 
-val commandList: Map<
-        String,
-        suspend (
-            MutableSharedFlow<CMDResponse>,
-            List<String>
-        ) -> Unit
-        > = mapOf(
-    "ls" to ::ls,
-    "cd" to ::cd,
-    "exit" to ::exit,
-)
+object CMD {
+    private val commands =
+        listOf(CD, LS, Exit).associateBy { it.name.lowercase() }
 
-suspend fun handleMessage(
-    outputFlow: MutableSharedFlow<CMDResponse>,
-    message: String
-) {
-    val argList = message.split(' ').toMutableList()
-    val command = argList.removeFirst()
+    private val _outputFlow = MutableSharedFlow<CMDResponse>()
+    val outputFlow = _outputFlow.asSharedFlow()
 
-    if (command in commandList)
-        commandList[command]?.let { it(outputFlow, argList) }
-    else outputFlow.emit(CMDResult.InvalidCommand(command))
+    suspend fun runScript(scriptPath: String) {
+        val candidate = File(scriptPath)
+        val script = if (candidate.isAbsolute) candidate
+        else File(VFS.path, scriptPath)
+
+
+        if (!script.exists() || !script.isFile) {
+            _outputFlow.emit(
+                CMDResult.InvalidArgument(
+                    script.path,
+                    "Файл не существует: ${script.path}"
+                )
+            )
+            return
+        } else if (!script.canRead()) {
+            _outputFlow.emit(
+                CMDResult.InvalidArgument(
+                    script.path,
+                    "Невозможно прочитать файл: ${script.path}"
+                )
+            )
+            return
+        }
+
+        val lines = script.readLines()
+        lines.forEach {
+            if (checkMessage(it)) {
+                _outputFlow.emit(CMDResult.Input(it))
+                handleMessage(it)
+            }
+        }
+    }
+
+    suspend fun handleMessage(
+        message: String
+    ) {
+        val argList = message.split(' ').toMutableList()
+        val command = argList.removeFirst().lowercase()
+
+        commands[command]?.invoke(_outputFlow, argList)
+            ?: _outputFlow.emit(CMDResult.InvalidCommand(command))
+    }
+
+    fun checkMessage(message: String): Boolean {
+        val argList = message.split(' ').toMutableList()
+        val command = argList.removeFirst().lowercase()
+
+        return commands[command]?.validate(argList) ?: false
+    }
+
 }
+
+
