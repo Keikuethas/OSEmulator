@@ -1,0 +1,5 @@
+ls
+cd
+ls a b c
+cd a b c
+exit 0

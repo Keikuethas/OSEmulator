@@ -5,22 +5,26 @@ import com.keikuethas.osemulator.cmd.commands.Exit
 import com.keikuethas.osemulator.cmd.commands.LS
 import com.keikuethas.osemulator.mvi.CMDResponse
 import com.keikuethas.osemulator.mvi.CMDResult
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import java.io.File
+import kotlinx.coroutines.flow.flatMapLatest
 
 object CMD {
     private val commands =
         listOf(CD, LS, Exit).associateBy { it.name.lowercase() }
-
     private val _outputFlow = MutableSharedFlow<CMDResponse>()
     val outputFlow = _outputFlow.asSharedFlow()
+    private val vfsState = MutableStateFlow(VFS())
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val vfsFlow = vfsState.flatMapLatest { it.curDir }
 
+    fun setVFS(path: String) {
+        vfsState.value = VFS(path)
+    }
     suspend fun runScript(scriptPath: String) {
-        val candidate = File(scriptPath)
-        val script = if (candidate.isAbsolute) candidate
-        else File(VFS.path, scriptPath)
-
+        val script = vfsState.value.getFile(scriptPath)
 
         if (!script.exists() || !script.isFile) {
             _outputFlow.emit(

@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.keikuethas.osemulator.cmd.CMD
 import com.keikuethas.osemulator.cmd.CMD.handleMessage
-import com.keikuethas.osemulator.cmd.VFS
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -26,44 +25,41 @@ class CMDViewModel(
     }
 
     private fun handleArguments(args: Array<String>) {
-        with(args)
-        {
-            if (isNotEmpty()) {
-                dispatch(CMDResult.Print("Получены аргументы командной строки:"))
-                forEach {
-                    dispatch(CMDResult.Print(it))
-                }
 
-                viewModelScope.launch {
-                    forEach { arg ->
-                        try {
-                            when {
-                                arg.startsWith("vfs=", ignoreCase = true) ->
-                                    VFS.path = arg.drop("vfs=".length)
+        if (args.isNotEmpty()) {
+            dispatch(CMDResult.Print("Получены аргументы командной строки:"))
+            args.forEach {
+                dispatch(CMDResult.Print(it))
+            }
 
-                                arg.startsWith("script=", ignoreCase = true) ->
-                                    CMD.runScript(arg.drop("script=".length))
 
-                                else -> dispatch(
-                                    CMDResult.InvalidArgument(
-                                        arg,
-                                        "Неизвестное имя аргумента."
-                                    )
-                                )
-                            }
-                        } catch (e: Exception) {
-                            dispatch(CMDResult.InvalidArgument(arg, e.message))
-                        }
+            args.findLast { it.startsWith("vfs=", ignoreCase = true) }?.drop("vfs=".length)?.let {
+                    try {
+                        CMD.setVFS(it)
+                    } catch (e: Exception) {
+                        dispatch(CMDResult.InvalidArgument(it, e.message))
                     }
                 }
-            } else dispatch(CMDResult.Print("Нет аргументов командной строки."))
-        }
+
+
+            args.findLast { it.startsWith("script=", ignoreCase = true) }?.drop("script=".length)
+                ?.let {
+                    viewModelScope.launch {
+                        try {
+                            CMD.runScript(it)
+                        } catch (e: Exception) {
+                            dispatch(CMDResult.InvalidArgument(it, e.message))
+                        }
+
+                    }
+                }
+        } else dispatch(CMDResult.Print("Нет аргументов командной строки."))
     }
 
     private fun observeVFS() {
         viewModelScope.launch {
-            VFS.curDir.collect {
-                _eventFlow.emit(CMDEvent.ChangeTitle(VFS.path))
+            CMD.vfsFlow.collect {dir ->
+                _eventFlow.emit(CMDEvent.ChangeTitle(dir.fullPath))
             }
         }
     }
