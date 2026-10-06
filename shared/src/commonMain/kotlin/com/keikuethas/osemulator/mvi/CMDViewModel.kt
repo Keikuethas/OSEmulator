@@ -3,89 +3,95 @@ package com.keikuethas.osemulator.mvi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.keikuethas.osemulator.cmd.CMD
-import com.keikuethas.osemulator.cmd.CMD.handleMessage
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
-class CMDViewModel(
-    args: Array<String>
-) : ViewModel() {
+class CMDViewModel(args: Array<String>) : ViewModel() {
     private val _windowStateFlow = MutableStateFlow(CMDWindowState())
-    private val _eventFlow = MutableSharedFlow<CMDEvent>(replay = 1)
+    private val _eventFlow = MutableSharedFlow<CMDEvent>(
+        replay = 1,
+        extraBufferCapacity = 16
+    )
+    private val _cmd = MutableStateFlow<CMD?>(null)
+
     val windowStateFlow = _windowStateFlow.asStateFlow()
     val eventFlow = _eventFlow.asSharedFlow()
 
     init {
-        observeResponse()
-        observeVFS()
+        observeCmd()
         handleArguments(args)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeCmd() {
+        viewModelScope.launch {
+            _cmd.filterNotNull()
+                .flatMapLatest { it.outputFlow }
+                .collect { response ->
+                    when (response) {
+                        is CMDResult -> dispatch(response)
+                        is CMDEvent  -> _eventFlow.emit(response)
+                    }
+                }
+        }
+        viewModelScope.launch {
+            _cmd.filterNotNull()
+                .flatMapLatest { it.vfsFlow }
+                .collect { dir ->
+                    _eventFlow.emit(CMDEvent.ChangeTitle(dir.fullPath))
+                }
+        }
+    }
+
     private fun handleArguments(args: Array<String>) {
+        if (args.isEmpty()) {
+            dispatch(CMDResult.Print("Нет аргументов командной строки."))
+            _cmd.value = CMD()
+            return
+        }
 
-        if (args.isNotEmpty()) {
-            dispatch(CMDResult.Print("Получены аргументы командной строки:"))
-            args.forEach {
-                dispatch(CMDResult.Print(it))
+        dispatch(CMDResult.Print("Получены аргументы командной строки:"))
+        args.forEach { dispatch(CMDResult.Print(it)) }
+
+        val vfsArg = args.findLast { it.startsWith("vfs=", true) }
+            ?.drop("vfs=".length)
+
+        _cmd.value = if (vfsArg != null) {
+            try {
+                CMD(vfsArg)
+            } catch (e: Exception) {
+                dispatch(CMDResult.InvalidArgument(vfsArg, e.message))
+                CMD()
             }
+        } else CMD()
 
-
-            args.findLast { it.startsWith("vfs=", ignoreCase = true) }?.drop("vfs=".length)?.let {
+        args.findLast { it.startsWith("script=", true) }
+            ?.drop("script=".length)
+            ?.let { script ->
+                viewModelScope.launch {
                     try {
-                        CMD.setVFS(it)
+                        _cmd.value!!.runScript(script)
                     } catch (e: Exception) {
-                        dispatch(CMDResult.InvalidArgument(it, e.message))
+                        dispatch(CMDResult.InvalidArgument(script, e.message))
                     }
                 }
-
-
-            args.findLast { it.startsWith("script=", ignoreCase = true) }?.drop("script=".length)
-                ?.let {
-                    viewModelScope.launch {
-                        try {
-                            CMD.runScript(it)
-                        } catch (e: Exception) {
-                            dispatch(CMDResult.InvalidArgument(it, e.message))
-                        }
-
-                    }
-                }
-        } else dispatch(CMDResult.Print("Нет аргументов командной строки."))
-    }
-
-    private fun observeVFS() {
-        viewModelScope.launch {
-            CMD.vfsFlow.collect {dir ->
-                _eventFlow.emit(CMDEvent.ChangeTitle(dir.fullPath))
             }
-        }
     }
-
-    private fun observeResponse() {
-        viewModelScope.launch {
-            CMD.outputFlow.collect {
-                when (it) {
-                    is CMDResult -> dispatch(it)
-                    is CMDEvent -> _eventFlow.emit(it)
-                }
-            }
-        }
-    }
-
 
     fun sendMessage(message: String) {
         viewModelScope.launch {
             dispatch(CMDResult.Input(message))
-            handleMessage(message)
+            _cmd.value?.handleMessage(message)
         }
     }
 
     private fun dispatch(result: CMDResult) {
-        _windowStateFlow.value = CMDReducer.reduce(
-            _windowStateFlow.value, result
-        )
+        _windowStateFlow.value = CMDReducer.reduce(_windowStateFlow.value, result)
     }
 }

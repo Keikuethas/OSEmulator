@@ -5,11 +5,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
 class VFS(
-    val rootPath: String = "C:\\"
+    val rootPath: String
 ) {
 
     open class VirtualContent(val parent: Directory? = null, val name: String) {
-        fun copy(parent: Directory? = this.parent, name: String = this.name) =
+        open fun copy(parent: Directory? = this.parent, name: String = this.name) =
             if (this is Directory) Directory(parent, name, children)
             else VirtualContent(parent, name)
     }
@@ -23,22 +23,28 @@ class VFS(
         private val _children: MutableList<VirtualContent> = initChildren.toMutableList()
         val children get() = _children.toList()
 
-        fun goTo(path: String): Directory? {
-            var localResult: Directory = this
+        override fun copy(parent: Directory?, name: String): Directory {
+            val newDir = Directory(parent, name)
+            _children.forEach { newDir._children.add(it.copy(parent = newDir)) }
+            return newDir
+        }
+
+        fun getContent(path: String): VirtualContent? {
+            var localResult: VirtualContent = this
             var mutPath = path
-            while (mutPath.isNotBlank()) {
+            while (mutPath.isNotBlank() && (localResult is Directory)) {
                 val localPath = mutPath.takeWhile { it != '/' }
-                if (localPath.isBlank()) continue
 
-                when (localPath) {
-                    "." -> {}
-                    ".." -> localResult = localResult.parent ?: break
-                    else -> localResult =
-                        (localResult.children.find { it.name == localPath } as? Directory)
-                            ?: break
-                }
+                if (localPath.isNotBlank())
+                    when (localPath) {
+                        "." -> {}
+                        ".." -> localResult = localResult.parent ?: break
+                        else -> localResult =
+                            localResult.children.find { it.name == localPath }
+                                ?: break
+                    }
 
-                mutPath = mutPath.drop(localPath.length)
+                mutPath = mutPath.drop(localPath.length + 1)
             }
             return if (mutPath.isBlank()) localResult else null
         }
@@ -64,20 +70,22 @@ class VFS(
             get() =
                 if (parent != null) "${parent.fullPath}/"
                 else ""
+
     }
 
     companion object {
         fun makeDir(dir: File): Directory {
             require(dir.isDirectory) { "Путь не является директорией: ${dir.path}" }
+            require(dir.canRead()) { "Нет прав на чтение ${dir.path}" }
             val localResult = Directory(name = dir.name)
             println(dir.name)
             println(dir.absolutePath)
-            dir.list().forEach {
-                val file = File(it)
+
+            dir.listFiles().forEach { file ->
 
                 localResult.addChild(
                     if (file.isDirectory) makeDir(file)
-                    else VirtualContent(name = it)
+                    else VirtualContent(name = file.name)
                 )
             }
 
@@ -105,6 +113,26 @@ class VFS(
 
     val curDir = _curDir.asStateFlow()
 
-    fun getFile(path: String): File =
+    fun getFileOnDisk(path: String): File =
         File(absoluteRootPath, "${_curDir.value.pathTo}/$path")
+
+    val root: Directory
+        get() {
+            var localResult = curDir.value
+            while (localResult.parent != null)
+                localResult = localResult.parent
+            return localResult
+        }
+
+    fun getContent(path: String): VirtualContent? =
+        if (path.startsWith('/')) root.getContent(path.drop(1))
+        else curDir.value.getContent(path)
+
+    fun goTo(path: String): Boolean {
+        val newDir = getContent(path) as? Directory
+        return if (newDir != null) {
+            _curDir.value = newDir
+            true
+        } else false
+    }
 }

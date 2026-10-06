@@ -11,4 +11,3 @@ if "!ARGS!"=="" (
     call gradlew.bat run --args="!ARGS!"
 )
 popd
-pause

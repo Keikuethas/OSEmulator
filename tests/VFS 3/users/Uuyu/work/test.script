@@ -1,5 +1,13 @@
+cd /users/Uuyu/work
 ls
-cd
-ls a b c
-cd a b c
-exit 0
+cd ..
+tree
+tree 0
+exit 1
+ls .. .
+cd .. .
+cd /
+ls system
+tree system/homework
+uptime
+uptime 0

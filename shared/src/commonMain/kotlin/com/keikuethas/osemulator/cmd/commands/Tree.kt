@@ -5,7 +5,7 @@ import com.keikuethas.osemulator.mvi.CMDResponse
 import com.keikuethas.osemulator.mvi.CMDResult
 import kotlinx.coroutines.flow.MutableSharedFlow
 
-object LS : TerminalCommand("ls") {
+object Tree : TerminalCommand("tree") {
     override suspend fun invoke(
         vfs: VFS,
         outputFlow: MutableSharedFlow<CMDResponse>,
@@ -16,7 +16,7 @@ object LS : TerminalCommand("ls") {
             outputFlow.emit(
                 CMDResult.InvalidArgument(
                     args[1],
-                    "Команда ls не поддерживает больше 1 аргумента"
+                    "Команда tree не поддерживает больше 1 аргумента"
                 )
             )
             return
@@ -35,26 +35,24 @@ object LS : TerminalCommand("ls") {
             return
         }
 
-        outputFlow.emit(
-            CMDResult.Print(
-                "Type \t \t Name\n"
-            )
-        )
-
-        dir.children.sortedWith(
-            compareBy<VFS.VirtualContent> { if (it is VFS.Directory) 1 else 0 }
-                .thenBy { it.name }
-        ).forEach {
-            val type: String = if (it is VFS.Directory) "Dir" else "File"
-            val name: String = it.name
-            outputFlow.emit(
-                CMDResult.Print(
-                    "$type \t \t $name"
+        suspend fun buildTree(dir: VFS.Directory, level: Int = 0) {
+            dir.children.sortedWith(
+                compareBy<VFS.VirtualContent> { if (it is VFS.Directory) 1 else 0 }
+                    .thenBy { it.name }
+            ).forEach {
+                outputFlow.emit(
+                    CMDResult.Print(
+                        "${"- ".repeat(level)}${it.name}"
+                    )
                 )
-            )
+
+                if (it is VFS.Directory)
+                    buildTree(it, level + 1)
+
+            }
         }
 
-        outputFlow.emit(CMDResult.Print(""))
+        buildTree(dir)
     }
 
     override fun validate(vfs: VFS, args: List<String>): Boolean {
@@ -65,5 +63,4 @@ object LS : TerminalCommand("ls") {
 
         return dir != null
     }
-
 }
