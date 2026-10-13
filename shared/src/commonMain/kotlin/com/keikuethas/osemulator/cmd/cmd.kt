@@ -57,7 +57,20 @@ class CMD(vfsPath: String = "") {
         message: String
     ) {
         val argList = message.split(' ').toMutableList()
+
         val command = argList.removeFirst().lowercase()
+
+        var i = 0
+        while(i < argList.size) {
+            if (argList[i].startsWith('"')) {
+                argList[i] = argList[i].drop(1)
+                while(i < argList.size-1 && !argList[i+1].endsWith('"')) {
+                    argList[i] += " ${argList.removeAt(i + 1)}"
+                }
+                if (i < argList.size - 1)
+                    argList[i] += " ${argList.removeAt(i + 1).dropLast(1)}"
+            } else i++
+        }
 
         commands[command]?.invoke(
             vfs = vfsState.value,
