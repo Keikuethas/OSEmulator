@@ -1,8 +1,10 @@
 package com.keikuethas.osemulator.cmd
 
 import com.keikuethas.osemulator.cmd.commands.CD
+import com.keikuethas.osemulator.cmd.commands.CP
 import com.keikuethas.osemulator.cmd.commands.Exit
 import com.keikuethas.osemulator.cmd.commands.LS
+import com.keikuethas.osemulator.cmd.commands.RM
 import com.keikuethas.osemulator.cmd.commands.Tree
 import com.keikuethas.osemulator.cmd.commands.Uptime
 import com.keikuethas.osemulator.mvi.CMDResponse
@@ -15,7 +17,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 
 class CMD(vfsPath: String = "") {
     private val commands =
-        listOf(CD, LS, Exit, Tree, Uptime).associateBy { it.name.lowercase() }
+        listOf(CD, LS, Exit, Tree, Uptime, CP, RM).associateBy { it.name.lowercase() }
     private val _outputFlow = MutableSharedFlow<CMDResponse>(replay = 1, extraBufferCapacity = 128)
     val outputFlow = _outputFlow.asSharedFlow()
     private val vfsState = MutableStateFlow(VFS(vfsPath))

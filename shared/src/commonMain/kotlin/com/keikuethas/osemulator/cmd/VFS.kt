@@ -8,10 +8,33 @@ class VFS(
     val rootPath: String
 ) {
 
-    open class VirtualContent(val parent: Directory? = null, val name: String) {
-        open fun copy(parent: Directory? = this.parent, name: String = this.name) =
+    open class VirtualContent(protected var _parent: Directory? = null, val name: String) {
+        val parent get() = _parent
+        open fun copy(parent: Directory? = this._parent, name: String = this.name) =
             if (this is Directory) Directory(parent, name, children)
             else VirtualContent(parent, name)
+
+        fun remove(): Boolean {
+            parent?.let {
+                if (it.removeChild(this)) {
+                    _parent = null
+                    return true
+                } else return false
+            }
+            return false
+        }
+
+        val fullPath: String
+            get() =
+                parent?.let {
+                    "${it.fullPath}/$name"
+                } ?: "/"
+
+        val pathTo: String
+            get() =
+                parent?.let {
+                    "${it.fullPath}/"
+                } ?: ""
     }
 
     class Directory(
@@ -61,15 +84,16 @@ class VFS(
             if (children.any { it.name == child.name }) false
             else _children.add(child.copy(parent = this))
 
-        val fullPath: String
-            get() =
-                if (parent != null) "${parent.fullPath}/$name"
-                else name
+        fun removeChild(child: VirtualContent ): Boolean {
+            return _children.remove(child)
+        }
 
-        val pathTo: String
-            get() =
-                if (parent != null) "${parent.fullPath}/"
-                else ""
+        fun removeChild(name: String): Boolean {
+            getContent(name)?.let {
+                removeChild(it)
+            } ?: return false
+            return true
+        }
 
     }
 
@@ -120,7 +144,7 @@ class VFS(
         get() {
             var localResult = curDir.value
             while (localResult.parent != null)
-                localResult = localResult.parent
+                localResult = localResult.parent!!
             return localResult
         }
 

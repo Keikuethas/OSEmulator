@@ -11,3 +11,5 @@ ls system
 tree system/homework
 uptime
 uptime 0
+cp "/users/Uuiu uia" /system/bicycles
+rm "/users/Uuiu uia"
