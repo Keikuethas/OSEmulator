@@ -40,12 +40,6 @@ object CP : TerminalCommand("cp") {
                 continue
             }
 
-            outputFlow.emit(
-                CMDResult.Print(
-                    "${local.fullPath} vs ${dest.fullPath}"
-                )
-            )
-
             if ( local.fullPath.startsWith(dest.fullPath)) {
                 outputFlow.emit(
                     CMDResult.InvalidArgument(
